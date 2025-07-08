@@ -1,0 +1,18 @@
+# Files Downloaded from Youtube
+downloads/
+
+# Synced Lyrics Downloaded From LRCLIB
+lyrics/
+
+# Backup Files
+backups/
+
+# Some Useless Files And Folders (For Now)
+changelogs.md
+MelodyFinder.spec
+theme_config.json
+
+build/
+dist/
+
+languages_manager/__pycache__/
