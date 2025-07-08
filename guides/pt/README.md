@@ -19,7 +19,7 @@ sudo apt-get update -y && sudo apt-get upgrade -y && sudo apt-get install ffmpeg
 choco install ffmpeg && pip3 install yt-dlp
 ```
 
-2. Configure o arquivo configs.json conforme necessário (Veja [guides/pt/configs-help.md](esse guia) para mais informações)
+2. Configure o arquivo configs.json conforme necessário (Veja [Este Guia](guides/pt/configs-help.md) para mais informações)
 # Uso
 ### Execute o script
 ```bash
