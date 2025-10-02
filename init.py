@@ -1,15 +1,17 @@
-import os  
-import json  
-import requests  
-import subprocess  
-import sys  
-import tkinter as tk  
+
+import os
+import json
+import requests
+import subprocess
+import sys
+import tkinter as tk
 from tkinter import filedialog, messagebox
 import pygame
 import time
-import difflib
+import threading
+import shutil
 
-sys.path.insert(0, './')  
+sys.path.insert(0, './')
 from languages_manager import languages_manager
 
 class LogRedirector:
@@ -21,9 +23,9 @@ class LogRedirector:
     def flush(self):
         pass
 
-class MelodyFinderGUI:  
-    def __init__(self):  
-        self.window = tk.Tk()  
+class MelodyFinderGUI:
+    def __init__(self):
+        self.window = tk.Tk()
         self.window.title("MelodyFinder - By @FetoyuDev | Dev Build 2.0")
         self.base_dir = os.path.dirname(os.path.abspath(__file__))
         self.config = self.carregar_configuracoes()
@@ -132,21 +134,26 @@ class MelodyFinderGUI:
         self.paused_time = 0
         self.last_pos = 0
 
+        # videos_encontrados guardará resultados da última busca (se houver)
+        self.videos_encontrados = []
+
         # Aplicar o tema salvo corretamente
         self.toggle_theme(force=True)
-        self.update_player_ui()  # Chama o loop de atualização
+        self.atualizar_fila_musicas()
+        # Inicia loop de atualização do player (UI)
+        self.window.after(500, self.update_player_ui)
 
-    def carregar_configuracoes(self):  
-        script_dir = os.path.dirname(os.path.abspath(__file__))  
-        config_file = os.path.join(script_dir, "configs.json")  
-        try:  
-            with open(config_file, "r") as file:  
-                return json.load(file)  
-        except FileNotFoundError:  
-            messagebox.showerror("Erro", "Arquivo de configuração não encontrado")  
-            sys.exit(1)  
-        except json.JSONDecodeError:  
-            messagebox.showerror("Erro", "Erro ao carregar o arquivo de configuração")  
+    def carregar_configuracoes(self):
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        config_file = os.path.join(script_dir, "configs.json")
+        try:
+            with open(config_file, "r") as file:
+                return json.load(file)
+        except FileNotFoundError:
+            messagebox.showerror("Erro", "Arquivo de configuração não encontrado")
+            sys.exit(1)
+        except json.JSONDecodeError:
+            messagebox.showerror("Erro", "Erro ao carregar o arquivo de configuração")
             sys.exit(1)
 
     def salvar_tema_config(self):
@@ -177,7 +184,6 @@ class MelodyFinderGUI:
         self.window.configure(bg=bg)
         self.frame_letras_sync.configure(bg=bg)
         self.text_letras_sync.configure(bg=entry_bg, fg=fg, insertbackground=fg)
-        # O resto dos widgets será atualizado em toggle_theme
 
     def toggle_theme(self, force=False):
         if not force:
@@ -202,7 +208,6 @@ class MelodyFinderGUI:
         self.button_tema.configure(text="☀️" if self.is_dark else "🌙")
 
     def listar_musicas_baixadas(self):
-        # Lista todos os arquivos mp3 na pasta de downloads
         mp3_dir = os.path.join(self.base_dir, self.config.get("paths", {}).get("mp3", "downloads/mp3"))
         if not os.path.exists(mp3_dir):
             return []
@@ -214,18 +219,18 @@ class MelodyFinderGUI:
         for path in self.song_list:
             self.listbox_fila_musicas.insert(tk.END, os.path.basename(path))
 
-    def baixar_musica(self):  
-        # Buscar música no YouTube  
+    def baixar_musica(self):
         query = self.entry_busca.get().strip()
         if not query:
             messagebox.showerror("Erro", "Digite o nome da música para buscar.")
             return
-        videos = self.pesquisar_videos_youtube(self.config["api_key"], self.config["language"], query)
+        # pesquisar no YouTube (usa chave do configs.json)
+        videos = self.pesquisar_videos_youtube(self.config.get("api_key", ""), self.config.get("language", ""), query)
         if videos:
             self.videos_encontrados = videos
             self.popup_resultados_youtube(videos)
         else:
-            messagebox.showerror("Erro", "Nenhum vídeo encontrado.")
+            messagebox.showerror("Erro", "Nenhum vídeo encontrado ou erro na pesquisa. Cheque sua API Key e conexão.")
 
     def popup_resultados_youtube(self, videos):
         popup = tk.Toplevel(self.window)
@@ -234,83 +239,157 @@ class MelodyFinderGUI:
         for v in videos:
             listbox.insert(tk.END, f"{v['title']} - {v['channel']}")
         listbox.pack(fill=tk.BOTH, expand=True)
+
         def baixar_selecionado():
             idx = listbox.curselection()
             if not idx:
+                messagebox.showwarning("Atenção", "Selecione um item para baixar.")
                 return
             video = videos[idx[0]]
-            self.baixar_video_ou_audio(video['url'], video['title'], self.config, modo_video=False)
-            popup.destroy()
-            self.atualizar_fila_musicas()
-            messagebox.showinfo("Sucesso", f"Música '{video['title']}' baixada!")
+            # roda o download em thread para não travar a UI
+            threading.Thread(target=self._baixar_em_thread, args=(video['url'], video['title'], False, popup), daemon=True).start()
+
         btn = tk.Button(popup, text="Baixar Selecionado", command=baixar_selecionado)
         btn.pack(pady=5)
 
     def baixar_video(self):
+        # botão "Baixar Vídeo" da UI principal: baixa a seleção da lista local (se for um vídeo)
         selection = self.listbox_fila_musicas.curselection()
         if not selection:
-            messagebox.showerror("Erro", "Selecione um vídeo na lista para baixar.")
+            messagebox.showerror("Erro", "Selecione um item na lista de músicas (baixadas) para baixar o vídeo correspondente.")
             return
         idx = selection[0]
+        if idx < 0 or idx >= len(self.videos_encontrados):
+            messagebox.showerror("Erro", "Não há informações do vídeo correspondente. Faça a busca novamente e baixe a partir dos resultados.")
+            return
         video = self.videos_encontrados[idx]
-        self.baixar_video_ou_audio(video['url'], video['title'], self.config, modo_video=True)
-        messagebox.showinfo("Sucesso", f"Vídeo '{video['title']}' baixado!")
+        threading.Thread(target=self._baixar_em_thread, args=(video['url'], video['title'], True, None), daemon=True).start()
 
-    def pesquisar_videos_youtube(self, api_key, idioma, query):  
-        SEARCH_URL = "https://www.googleapis.com/youtube/v3/search"  
-        params = {  
-            "part": "snippet",  
-            "q": query,  
-            "type": "video",  
-            "maxResults": 5,  
-            "key": api_key,  
-        }  
-        response = requests.get(SEARCH_URL, params=params)  
-        if response.status_code == 200:  
-            data = response.json()  
-            videos = []  
-            for idx, item in enumerate(data['items'], start=1):  
-                video_title = item['snippet']['title']  
-                channel_title = item['snippet']['channelTitle']  
-                video_id = item['id']['videoId']  
-                video_url = f"https://youtube.com/watch?v={video_id}"  
-                videos.append({"id": idx, "title": video_title, "channel": channel_title, "url": video_url})  
+    def pesquisar_videos_youtube(self, api_key, idioma, query):
+        SEARCH_URL = "https://www.googleapis.com/youtube/v3/search"
+        params = {
+            "part": "snippet",
+            "q": query,
+            "type": "video",
+            "maxResults": 8,
+            "key": api_key,
+        }
+        try:
+            response = requests.get(SEARCH_URL, params=params, timeout=10)
+        except Exception as e:
+            print(f"Erro na requisição de busca: {e}")
+            return []
+        if response.status_code == 200:
+            try:
+                data = response.json()
+            except ValueError:
+                return []
+            videos = []
+            for idx, item in enumerate(data.get('items', [])):
+                video_title = item['snippet']['title']
+                channel_title = item['snippet']['channelTitle']
+                video_id = item['id'].get('videoId')
+                if not video_id:
+                    continue
+                video_url = f"https://youtube.com/watch?v={video_id}"
+                videos.append({"id": idx+1, "title": video_title, "channel": channel_title, "url": video_url})
             return videos
+        else:
+            print("YouTube API retornou status:", response.status_code, response.text)
         return []
 
-    def baixar_video_ou_audio(self, url, video_title, config, modo_video=False):  
-        # Usar os diretórios do configs.json corretamente
+    def _baixar_em_thread(self, url, video_title, modo_video=False, popup=None):
+        """Wrapper para executar baixar_video_ou_audio em thread e informar o usuário."""
+        try:
+            self.add_log(f"Iniciando download: {video_title} ({'vídeo' if modo_video else 'áudio'})\n")
+            success = self.baixar_video_ou_audio(url, video_title, self.config, modo_video=modo_video)
+            if success:
+                self.add_log("Download finalizado com sucesso.\n")
+                # atualizar a lista de músicas baixadas na UI (chamar via after)
+                self.window.after(200, self.atualizar_fila_musicas)
+                if popup:
+                    try:
+                        popup.destroy()
+                    except Exception:
+                        pass
+                messagebox.showinfo("Sucesso", f"{'Vídeo' if modo_video else 'Música'} '{video_title}' baixado!")
+            else:
+                messagebox.showerror("Erro", f"Falha ao baixar '{video_title}'. Confira os logs.")
+        except Exception as e:
+            self.add_log(f"Erro no thread de download: {e}\n")
+            messagebox.showerror("Erro", f"Erro ao baixar: {e}")
+
+    def baixar_video_ou_audio(self, url, video_title, config, modo_video=False):
+        # retorna True/False se o download ocorreu OK
         paths = config.get("paths", {})
         temp_dir = os.path.join(self.base_dir, paths.get("temp", "downloads/temp"))
         mp3_dir = os.path.join(self.base_dir, paths.get("mp3", "downloads/mp3"))
         mp4_dir = os.path.join(self.base_dir, paths.get("mp4", "downloads/mp4"))
-        os.makedirs(temp_dir, exist_ok=True)  
-        os.makedirs(mp3_dir, exist_ok=True)  
-        os.makedirs(mp4_dir, exist_ok=True)  
-        if modo_video:
-            subprocess.run([  
-                "yt-dlp",  
-                "-f", "bestvideo+bestaudio",  
-                "--merge-output-format", "mp4",  
-                "-o", os.path.join(mp4_dir, "%(title)s.%(ext)s"),  
-                url  
-            ])
-        else:
-            subprocess.run([  
-                "yt-dlp",  
-                "-f", "bestaudio",  
-                "--extract-audio",  
-                "--audio-format", "mp3",  
-                "--audio-quality", "0",  
-                "-o", os.path.join(temp_dir, "%(title)s.%(ext)s"),  
-                url  
-            ])  
-            mp3_files = [f for f in os.listdir(temp_dir) if f.endswith(".mp3")]  
-            for file in mp3_files:  
-                os.rename(os.path.join(temp_dir, file), os.path.join(mp3_dir, file))  
+        os.makedirs(temp_dir, exist_ok=True)
+        os.makedirs(mp3_dir, exist_ok=True)
+        os.makedirs(mp4_dir, exist_ok=True)
 
-    def buscar_letras(self):  
-        # Busca letras usando o texto da barra de busca, não o resultado selecionado
+        # Verifica se yt-dlp está disponível
+        try:
+            subprocess.run(["yt-dlp", "--version"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
+        except Exception as e:
+            self.add_log("Erro: yt-dlp não encontrado. Instale 'yt-dlp' e tente novamente.\n")
+            return False
+
+        try:
+            if modo_video:
+                cmd = [
+                    "yt-dlp",
+                    "-f", "bestvideo+bestaudio",
+                    "--merge-output-format", "mp4",
+                    "-o", os.path.join(mp4_dir, "%(title)s.%(ext)s"),
+                    url
+                ]
+                proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                if proc.returncode != 0:
+                    self.add_log(f"yt-dlp erro (vídeo): {proc.stderr}\n")
+                    return False
+                return True
+            else:
+                # Baixar áudio para temp e converter para mp3
+                cmd = [
+                    "yt-dlp",
+                    "-f", "bestaudio",
+                    "--extract-audio",
+                    "--audio-format", "mp3",
+                    "--audio-quality", "0",
+                    "-o", os.path.join(temp_dir, "%(title)s.%(ext)s"),
+                    url
+                ]
+                proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                if proc.returncode != 0:
+                    self.add_log(f"yt-dlp erro (áudio): {proc.stderr}\n")
+                    return False
+                # Mover mp3(s) do temp para mp3_dir
+                mp3_files = [f for f in os.listdir(temp_dir) if f.lower().endswith(".mp3")]
+                if not mp3_files:
+                    self.add_log("Nenhum arquivo .mp3 gerado pelo yt-dlp.\n")
+                    return False
+                for file in mp3_files:
+                    src = os.path.join(temp_dir, file)
+                    dst = os.path.join(mp3_dir, file)
+                    try:
+                        shutil.move(src, dst)
+                    except Exception as e:
+                        self.add_log(f"Erro movendo arquivo {file}: {e}\n")
+                        try:
+                            # tentativa alternativa: copiar e remover
+                            shutil.copy2(src, dst)
+                            os.remove(src)
+                        except Exception as e2:
+                            self.add_log(f"Falha ao mover/copy {file}: {e2}\n")
+                            return False
+                return True
+        except Exception as e:
+            self.add_log(f"Erro no download: {e}\n")
+            return False
+
+    def buscar_letras(self):
         busca = self.entry_busca.get().strip()
         if not busca or " - " not in busca:
             messagebox.showerror("Erro", "Digite na barra de busca no formato: Artista - Música")
@@ -319,7 +398,11 @@ class MelodyFinderGUI:
         musica = musica.strip().lower().replace(' ', '+')
         artista = artista.strip().lower().replace(' ', '+')
         url = f'https://lrclib.net/api/get?artist_name={artista}&track_name={musica}'
-        response = requests.get(url)
+        try:
+            response = requests.get(url, timeout=10)
+        except Exception as e:
+            messagebox.showerror("Erro", f"Erro na requisição: {e}")
+            return
         if response.status_code == 200:
             try:
                 letra = response.json()
@@ -344,6 +427,7 @@ class MelodyFinderGUI:
     def on_seek(self, value):
         if self.is_playing or self.is_paused:
             try:
+                # pygame.mixer.music.play(start=...) só funciona em algumas plataformas; aqui tentamos set_pos se possível
                 pygame.mixer.music.play(start=float(value))
                 self.last_pos = float(value)
                 self.play_start_time = time.time() - float(value)
@@ -423,115 +507,88 @@ class MelodyFinderGUI:
         self.button_random.config(relief=tk.SUNKEN if self.random_on else tk.RAISED)
 
     def load_song(self, path):
-        self.current_song_path = path
-        pygame.mixer.music.load(path)
-        self.song_length = pygame.mixer.Sound(path).get_length()
-        self.label_song_name.config(text=f"Arquivo: {os.path.basename(path)}")
-        self.seek_bar.config(to=int(self.song_length))
-        self.seek_var.set(0)
-        self.label_time.config(text=f"00:00 / {self.format_time(self.song_length)}")
-        self.label_remaining.config(text=f"Restante: {self.format_time(self.song_length)}")
-        self.last_pos = 0
-        self.letra_sincronizada = self.buscar_letra_sincronizada(path)
-        self.letras_lidas = self.parse_letra_sincronizada(self.letra_sincronizada) if self.letra_sincronizada else []
-        self.text_letras_sync.delete(1.0, tk.END)
-        if self.letra_sincronizada:
-            self.text_letras_sync.insert(tk.END, self.letra_sincronizada)
-        else:
-            self.text_letras_sync.insert(tk.END, "Letra sincronizada não encontrada.")
-
-    def buscar_letra_sincronizada(self, song_path):
-        lyrics_dir = os.path.join(self.base_dir, self.config.get("paths", {}).get("lyrics", "lyrics"))
-        if not os.path.exists(lyrics_dir):
-            return None
-        song_name = os.path.splitext(os.path.basename(song_path))[0].lower()
-        arquivos = [f for f in os.listdir(lyrics_dir) if f.endswith('.txt')]
-        if not arquivos:
-            return None
-        # Similaridade de nomes
-        melhor = difflib.get_close_matches(song_name, [os.path.splitext(f)[0].lower() for f in arquivos], n=1, cutoff=0.5)
-        if melhor:
-            idx = [os.path.splitext(f)[0].lower() for f in arquivos].index(melhor[0])
-            letra_path = os.path.join(lyrics_dir, arquivos[idx])
-            with open(letra_path, 'r', encoding='utf-8') as f:
-                return f.read()
-        return None
-
-    def parse_letra_sincronizada(self, letra):
-        # Retorna lista de tuplas (segundo, texto)
-        import re
-        linhas = letra.splitlines()
-        result = []
-        for linha in linhas:
-            match = re.match(r'\[(\d+):(\d+)(?:\.(\d+))?\](.*)', linha)
-            if match:
-                m, s, ms, texto = match.groups()
-                tempo = int(m)*60 + int(s)
-                if ms:
-                    tempo += int(ms)/100
-                result.append((tempo, texto.strip()))
-        return result
-
-    def update_player_ui(self):
-        # Atualiza tempo e seek
-        if self.is_playing or self.is_paused:
-            pos = self.get_current_pos()
-            if pos > self.song_length:
-                pos = self.song_length
-            self.seek_var.set(pos)
-            self.label_time.config(text=f"{self.format_time(pos)} / {self.format_time(self.song_length)}")
-            self.label_remaining.config(text=f"Restante: {self.format_time(self.song_length - pos)}")
-        # Atualiza letra sincronizada
-        if hasattr(self, 'letras_lidas') and self.letras_lidas:
-            pos = self.get_current_pos()
-            atual = ''
-            for i, (t, texto) in enumerate(self.letras_lidas):
-                if pos >= t:
-                    atual = texto
-            self.text_letras_sync.delete(1.0, tk.END)
-            self.text_letras_sync.insert(tk.END, atual)
-        self.window.after(500, self.update_player_ui)
-
-    def get_current_pos(self):
-        if self.is_playing and not self.is_paused:
-            return time.time() - self.play_start_time
-        else:
-            return self.last_pos
+        try:
+            self.current_song_path = path
+            pygame.mixer.music.load(path)
+            self.song_length = pygame.mixer.Sound(path).get_length()
+            self.label_song_name.config(text=f"Arquivo: {os.path.basename(path)}")
+            self.seek_bar.config(to=int(self.song_length))
+            self.seek_var.set(0)
+            self.label_time.config(text=f"00:00 / {self.format_time(self.song_length)}")
+        except Exception as e:
+            self.add_log(f"Erro carregando música: {e}\n")
 
     def format_time(self, seconds):
-        seconds = int(seconds)
-        m, s = divmod(seconds, 60)
-        return f"{m:02d}:{s:02d}"
+        try:
+            seconds = int(seconds)
+            m = seconds // 60
+            s = seconds % 60
+            return f"{m:02d}:{s:02d}"
+        except Exception:
+            return "00:00"
 
-    def add_log(self, msg):
-        self.logs.append(msg)
-        if self.log_text_widget:
-            self.log_text_widget.insert(tk.END, msg)
-            self.log_text_widget.see(tk.END)
+    def get_current_pos(self):
+        # estimativa baseada em play_start_time e paused_time
+        if not self.is_playing:
+            return self.last_pos
+        try:
+            if self.is_paused:
+                return self.last_pos
+            return time.time() - self.play_start_time
+        except Exception:
+            return 0
+
+    def update_player_ui(self):
+        # Atualiza barra de progresso e labels
+        try:
+            if self.is_playing and not self.is_paused:
+                pos = self.get_current_pos()
+                if pos < 0:
+                    pos = 0
+                if self.song_length:
+                    if pos >= self.song_length - 0.5:
+                        # fim da faixa
+                        if self.repeat_mode == 'song':
+                            self.load_song(self.current_song_path)
+                            pygame.mixer.music.play()
+                        else:
+                            self.next_song()
+                    else:
+                        self.seek_var.set(pos)
+                        self.label_time.config(text=f"{self.format_time(pos)} / {self.format_time(self.song_length)}")
+                        remaining = max(0, int(self.song_length - pos))
+                        self.label_remaining.config(text=f"Restante: {self.format_time(remaining)}")
+            # agenda próxima atualização
+        except Exception as e:
+            self.add_log(f"Erro update UI: {e}\n")
+        self.window.after(500, self.update_player_ui)
 
     def abrir_logs(self):
         if self.log_window and tk.Toplevel.winfo_exists(self.log_window):
             self.log_window.lift()
             return
         self.log_window = tk.Toplevel(self.window)
-        self.log_window.title("Logs do Programa")
-        self.log_text_widget = tk.Text(self.log_window, height=20, width=80, bg="#111", fg="#0f0")
+        self.log_window.title("Logs")
+        self.log_text_widget = tk.Text(self.log_window, height=20, width=80)
         self.log_text_widget.pack(fill=tk.BOTH, expand=True)
-        for log in self.logs:
-            self.log_text_widget.insert(tk.END, log)
-        self.log_text_widget.see(tk.END)
-        self.log_window.protocol("WM_DELETE_WINDOW", self.fechar_logs)
+        self.log_text_widget.insert(tk.END, "".join(self.logs))
 
-    def fechar_logs(self):
-        self.log_window.destroy()
-        self.log_window = None
-        self.log_text_widget = None
+    def add_log(self, msg):
+        timestamp = time.strftime("[%Y-%m-%d %H:%M:%S] ")
+        self.logs.append(timestamp + msg)
+        # manter apenas últimos 2000 linhas para não explodir a memória
+        if len(self.logs) > 2000:
+            self.logs = self.logs[-2000:]
+        if self.log_text_widget:
+            try:
+                self.log_text_widget.insert(tk.END, timestamp + msg)
+                self.log_text_widget.see(tk.END)
+            except Exception:
+                pass
 
-    # Chame atualizar_fila_musicas ao iniciar
-    def run(self):
-        self.atualizar_fila_musicas()
-        self.window.mainloop()
+def main():
+    app = MelodyFinderGUI()
+    app.window.mainloop()
 
-if __name__ == "__main__":  
-    gui = MelodyFinderGUI()  
-    gui.run()
+if __name__ == "__main__":
+    main()
