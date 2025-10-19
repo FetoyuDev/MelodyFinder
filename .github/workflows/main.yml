@@ -1,0 +1,77 @@
+name: android-apk
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ Android ]
+    paths:
+      - 'mobile/**'
+      - '.github/workflows/main.yml'
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+            python-version: '3.11'
+
+      - name: Set up Java (for build tools)
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Install buildozer deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zip unzip libffi-dev libssl-dev libsqlite3-dev zlib1g-dev \
+              autoconf automake build-essential ccache git libtool pkg-config \
+              python3-dev libncurses5-dev libncursesw5-dev libreadline6-dev \
+              libgdbm-dev libbz2-dev libexpat1-dev liblzma-dev \
+              openjdk-17-jdk
+          python -m pip install --upgrade pip
+          pip install cython buildozer
+
+      - name: Create buildozer.spec
+        working-directory: mobile
+        run: |
+          if [ ! -f buildozer.spec ]; then
+            cat > buildozer.spec <<'EOF'
+[app]
+title = MelodyFinder
+package.name = melodyfinder
+package.domain = org.melodyfinder
+source.dir = .
+source.include_exts = py,png,jpg,jpeg
+version = 0.1.0
+requirements = python3,kivy,requests
+orientation = portrait
+fullscreen = 0
+log_level = 2
+
+[buildozer]
+log_level = 2
+warn_on_root = 0
+
+[app.android]
+android.api = 33
+android.minapi = 21
+android.arch = arm64-v8a,armeabi-v7a
+EOF
+          fi
+
+      - name: Build APK with Buildozer
+        working-directory: mobile
+        run: |
+          buildozer android debug
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: melodyfinder-apk
+          path: mobile/bin/*.apk
