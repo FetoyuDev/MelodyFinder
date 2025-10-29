@@ -14,10 +14,17 @@ idiomas = {
         #...  
     },  
     'es': {  
-        'titulo': 'MelodyFinder',  
-        'mensagem_bem_vindo': 'Bienvenido al MelodyFinder!',  
-        'mensagem_erro': 'Ocurrió un error. Por favor, inténtalo de nuevo.',  
-        'mensagem_sucesso': 'El vídeo se ha descargado con éxito!',  
+    'título': 'MelodyFinder',  
+    'mensaje_bienvenido': 'Bienvenido al MelodyFinder!',  
+    'mensaje_error': 'Ocurrió un error. Por favor, inténtalo de nuevo.',  
+    'mensaje_exito': 'El vídeo se ha descargado con éxito!',  
+    #...  
+    },  
+    'it': {  
+        'titolo': 'MelodyFinder',  
+        'messaggio_benvenuto': 'Benvenuto in MelodyFinder!',  
+        'messaggio_errore': 'Si è verificato un errore. Per favore, riprova.',  
+        'messaggio_successo': 'Il video è stato scaricato con successo!',  
         #...  
     }  
 }
