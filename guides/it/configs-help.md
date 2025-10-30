@@ -6,7 +6,7 @@ Questa guida spiega come configurare il file `configs.json` per personalizzare i
 
 Il file `configs.json` contiene le seguenti impostazioni:
 
-### api_key
+### Chiave API
 - **Tipo**: Stringa
 - **Descrizione**: La chiave API per YouTube Data API v3.
 - **Come ottenerla**:
@@ -18,13 +18,13 @@ Il file `configs.json` contiene le seguenti impostazioni:
 - **Esempio**: `"AIzaSyB..."`
 - **Nota**: Mantieni questa chiave sicura e non condividerla.
 
-### language
+### Lingue
 - **Tipo**: Stringa
 - **Descrizione**: La lingua dell'interfaccia.
-- **Valori possibili**: `"en"` (inglese), `"pt"` (portoghese), `"es"` (spagnolo), `"it"` (italiano)
+- **Valori possibili**: `"en"` (inglese),  `"es"` (spagnolo), `"it"` (italiano), `"pt"` (portoghese)
 - **Esempio**: `"it"`
 
-### paths
+### Percorsi
 - **Tipo**: Oggetto
 - **Descrizione**: Percorsi delle cartelle per i file scaricati e temporanei.
 - **Sottocampi**:
@@ -43,7 +43,7 @@ Il file `configs.json` contiene le seguenti impostazioni:
   ```
 - **Nota**: I percorsi sono relativi alla directory di esecuzione dello script. Assicurati che le cartelle esistano o che lo script possa crearle.
 
-### theme
+### Temi
 - **Tipo**: Stringa
 - **Descrizione**: Il tema dell'interfaccia.
 - **Valori possibili**: `"dark"`, `"light"`
