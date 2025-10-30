@@ -1,7 +1,4 @@
-
-# Melody Finder
-
-## A cross-platform music player and downloader with Discord Rich Presence integration built with PyQt6.
+## A cross-platform music player and downloader with Discord RP integration.
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Python](https://img.shields.io/badge/python-3.8+-blue.svg)
@@ -34,8 +31,6 @@ MelodyFinder/
 ```
 
 ## 🚀 Getting Started
-
-Uhhm, so there is no translation for other languages cause i was too lazy to make one.
 
 ### Prerequisites
 
@@ -107,8 +102,6 @@ Before running MelodyFinder, configure `configs.json`:
 
 ## 🎮 Usage
 
-Pretty self explanatory.
-
 ### Basic Controls
 
 - **Open File**: Load an audio file (MP3, WAV, FLAC)
@@ -164,7 +157,7 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## 📝 License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+This project is licensed under the MIT License.
 
 ## 🔗 Links
 
