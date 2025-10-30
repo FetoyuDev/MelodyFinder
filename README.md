@@ -87,7 +87,6 @@ Before running MelodyFinder, configure `configs.json`:
 ```
 
 ### Configuration Options
-|----------------|---------------------------------------------|------------------|
 |     Field      |                Description                  |      Default     |
 |----------------|---------------------------------------------|------------------|
 | `api_key`      | YouTube Data API v3 key for video downloads | Required         |
@@ -97,7 +96,6 @@ Before running MelodyFinder, configure `configs.json`:
 | `paths.mp4`    | MP4 output directory                        | `downloads/mp4`  |
 | `paths.lyrics` | Lyrics storage directory                    | `lyrics`         |
 | `theme`        | UI theme (`dark` or `light`)                | `dark`           |
-|----------------|---------------------------------------------|------------------|
 
 ### Getting a YouTube API Key
 
