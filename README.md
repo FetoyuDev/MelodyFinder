@@ -1,4 +1,4 @@
-## A cross-platform music player and downloader with Discord RP integration.
+## A cross-platform music player and downloader with Discord RP integration
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Python](https://img.shields.io/badge/python-3.8+-blue.svg)
@@ -46,12 +46,14 @@ pip install PyQt6 requests pypresence
 ### Installation
 
 1. Clone the repository:
+
 ```bash
 git clone https://github.com/FetoyuDev/MelodyFinder.git
 cd MelodyFinder
 ```
 
 2. Install dependencies:
+
 ```bash
 pip install -r requirements.txt
 ```
@@ -59,6 +61,7 @@ pip install -r requirements.txt
 3. Configure the application (see [Configuration](#-configuration))
 
 4. Run the application:
+
 ```bash
 python init.py
 ```
@@ -82,6 +85,7 @@ Before running MelodyFinder, configure `configs.json`:
 ```
 
 ### Configuration Options
+
 |     Field      |                Description                  |      Default     |
 |----------------|---------------------------------------------|------------------|
 | `api_key`      | YouTube Data API v3 key for video downloads | Required         |
@@ -113,6 +117,7 @@ Before running MelodyFinder, configure `configs.json`:
 ### Discord Integration
 
 MelodyFinder displays your currently playing track on Discord:
+
 - Track title
 - Playback status (Playing/Paused/Stopped)
 - Custom Rich Presence images
@@ -122,6 +127,7 @@ To enable Discord Rich Presence, add your Discord Client ID to the configuration
 ### Language Selection
 
 Change the `language` field in configs.json:
+
 - `en` - English
 - `pt` - Portuguese
 - `es` - Spanish
