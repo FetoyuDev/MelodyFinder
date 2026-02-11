@@ -26,5 +26,12 @@ idiomas = {
         'messaggio_errore': 'Si è verificato un errore. Per favore, riprova.',  
         'messaggio_successo': 'Il video è stato scaricato con successo!',  
         #...  
-    }  
+    },
+    'tr': {
+        'titulo': 'MelodyFinder',
+        'mensagem_bem_vindo': 'MelodyFinder a Hoşgeldiniz!',
+        'mensagem_erro': 'Bir hata oluştu. Lütfen tekrar deneyin.',
+        'mensagem_sucesso': 'Video başarıyla indirildi!',
+        #...
+    }
 }
